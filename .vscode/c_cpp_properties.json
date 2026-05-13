@@ -1,0 +1,11 @@
+{
+  "configurations": [
+    {
+      "name": "linux-gcc-x64",
+      "compilerPath": "/usr/bin/gcc",
+      "compileCommands": "${workspaceFolder}/build/compile_commands.json",
+      "intelliSenseMode": "linux-gcc-x64"
+    }
+  ],
+  "version": 4
+}

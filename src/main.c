@@ -1,56 +1,77 @@
 #include "raylib.h"
-#include "open-simplex-noise.h"
 #include <stdio.h>
-#include <sys/types.h>
 
+#if defined(PLATFORM_DESKTOP)
+    #define GLSL_VERSION            330
+#else   // PLATFORM_ANDROID, PLATFORM_WEB
+    #define GLSL_VERSION            100
+#endif
 
 int main(void) {
-    // Initialization
-    const int screenWidth = 800*2;
-    const int screenHeight = 450*2;
-    const double noise_Size = 0.03;
-    double td = 0;
-
-    InitWindow(screenWidth, screenHeight, "Flowfield");
-    struct osn_context *ctx;
-    open_simplex_noise(0, &ctx);
+    double t0 = GetTime(); 
     
-
+    const int screenWidth = 1600;
+    const int screenHeight = 900;
+    InitWindow(screenWidth, screenHeight, "RayLib");
     SetTargetFPS(60);
-    u_int8_t noise_buff[screenWidth*screenHeight];
 
-    Image image = {
-        .data = noise_buff,
-        .width = screenWidth,
-        .height = screenHeight,
-        .mipmaps = 1,
-        .format = PIXELFORMAT_UNCOMPRESSED_GRAYSCALE
-    };
-    Texture2D texture = LoadTextureFromImage(image);
+    RenderTexture2D target = LoadRenderTexture(screenWidth, screenHeight);
+    Shader shader = LoadShader("src/shaders/simple_vert.vert", "src/shaders/simple_frag.frag");
+
+    int resLoc = GetShaderLocation(shader, "uResolution");
+    int timeLoc = GetShaderLocation(shader, "uTime");
+    int mouseLoc = GetShaderLocation(shader, "uMouseCoords");
+
+    float resolution[2] = { (float)screenWidth-20, (float)screenHeight-20 };
+    float time = 0.0f;
+
+    
+    double t1 = GetTime();
+    printf("Total Init Time: %f ms\n", (t1 - t0) * 1000.0);
 
     while (!WindowShouldClose())
     {
-        #pragma omp parallel for schedule(dynamic)
-        for (int j = 0; j < screenHeight; j++) {
-            for (int i = 0; i < screenWidth; i++) {
-                double value = open_simplex_noise4(ctx, i*noise_Size, j*noise_Size, td, 0);
-                value = open_simplex_noise2(ctx, value - 1, value);
-                noise_buff[j*screenWidth + i] = (uint8_t)((value + 1) * 127.5);
-            }
-        }
-        td += 0.01;
+        double tn_0 = GetTime();
+        float mouseCoord[2] = { (float)GetMouseX(), (float)(screenHeight - GetMouseY()) };
 
-        UpdateTexture(texture, noise_buff);
+        
+        // Logic
+        time = GetTime();
+        SetShaderValue(shader, resLoc, resolution, SHADER_UNIFORM_VEC2);
+        SetShaderValue(shader, timeLoc, &time, SHADER_UNIFORM_FLOAT);
+        SetShaderValue(shader, mouseLoc, mouseCoord, SHADER_UNIFORM_VEC2);
+
+        // BeginTextureMode(target);   
+        //     ClearBackground(WHITE);
+        // EndTextureMode();
+
+        double tn_1 = GetTime();
 
         BeginDrawing();
-            DrawTexture(texture, 0, 0, WHITE);
-            DrawText("RayLib", 190, 200, 20, LIGHTGRAY);
-        EndDrawing();
+            ClearBackground(BLACK);
 
-        printf("%f\n", GetFrameTime());
+            BeginShaderMode(shader);
+                DrawRectangle(10, 10, screenWidth-20, screenHeight-20, RED);
+            EndShaderMode();
+
+            DrawText("RayLib", 190, 200, 20, LIGHTGRAY);
+            
+            // Displaying the raw data in the window
+            DrawText(TextFormat("Logic: %.4f ms", (tn_1 - tn_0) * 1000.0), 20, 20, 20, GREEN);
+            DrawText(TextFormat("Draw:  %.4f ms", (GetTime() - tn_1) * 1000.0), 20, 50, 20, SKYBLUE);
+            
+            DrawText(TextFormat("FPS:  %i", GetFPS()), 20, 80, 20, SKYBLUE);
+        EndDrawing();
+        
+        double tn_2 = GetTime();
+
+        // 4. Print Frame Summary to Console
+        // Total "Work" Time vs Frame Time
+        printf("Logic: %.3fms | Draw: %.3fms | Total: %.3fms\r", 
+                (tn_1 - tn_0) * 1000.0, (tn_2 - tn_1) * 1000.0, (tn_1 - tn_0) * 1000.0 + (tn_2 - tn_1) * 1000.0);
+        fflush(stdout);
     }
 
-    UnloadTexture(texture);
     CloseWindow();
     return 0;
 }
