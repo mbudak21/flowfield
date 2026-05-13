@@ -19,38 +19,38 @@ int main(void) {
     SetTargetFPS(60);
     u_int8_t noise_buff[screenWidth*screenHeight];
 
+    Image image = {
+        .data = noise_buff,
+        .width = screenWidth,
+        .height = screenHeight,
+        .mipmaps = 1,
+        .format = PIXELFORMAT_UNCOMPRESSED_GRAYSCALE
+    };
+    Texture2D texture = LoadTextureFromImage(image);
+
     while (!WindowShouldClose())
     {
-
-
-        for (int i = 0; i < screenWidth; i++) {
-            for (int j = 0; j < screenHeight; j++) {
+        #pragma omp parallel for schedule(dynamic)
+        for (int j = 0; j < screenHeight; j++) {
+            for (int i = 0; i < screenWidth; i++) {
                 double value = open_simplex_noise4(ctx, i*noise_Size, j*noise_Size, td, 0);
-                uint32_t rgb = (uint32_t) ((value + 1) * 127.5);
-                noise_buff[j*screenWidth + i] = rgb;
+                value = open_simplex_noise2(ctx, value - 1, value);
+                noise_buff[j*screenWidth + i] = (uint8_t)((value + 1) * 127.5);
             }
         }
+        td += 0.01;
+
+        UpdateTexture(texture, noise_buff);
 
         BeginDrawing();
-
-            ClearBackground(RAYWHITE);
-
-            for (int i = 0; i < screenWidth; i++) {
-                for (int j = 0; j < screenHeight; j++) {
-                    int val = noise_buff[j*screenWidth + i];
-                    Color col = (Color){val, val, val, 255};
-                    DrawPixel(i, j, col);
-                }
-            }
-            td += 0.05;
-
+            DrawTexture(texture, 0, 0, WHITE);
             DrawText("RayLib", 190, 200, 20, LIGHTGRAY);
-
         EndDrawing();
 
         printf("%f\n", GetFrameTime());
     }
 
+    UnloadTexture(texture);
     CloseWindow();
     return 0;
 }
